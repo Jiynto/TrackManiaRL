@@ -1,37 +1,39 @@
 import pybullet_envs
 import gym
+import tensorflow as tf
+import tensorflow.keras.models
 import numpy as np
 from sac_tf2 import Agent
 from utils import plot_learning_curve
 from gym import wrappers
+from environment import TrackmaniaEnv
 
 if __name__ == '__main__':
-    env = gym.make('InvertedPendulumBulletEnv-v0')
-    agent = Agent(input_dims=env.observation_space.shape, env=env, n_actions=env.action_space.shape[0])
+
+    VAEncoder = tf.keras.models.load_model('CVAE/Models/model', compile=True)
+    #VAEncoder.summary()
+
+    agent = Agent(input_dims=VAEncoder.get_layer(index=VAEncoder.layers[-1:]).shape(), max_action=1, n_actions=2)
     n_games = 250
-    # uncomment to record video fo agent playing game
-    #env = wrappers.Monitor(env, 'tmp/video', video_callable=lambda episode_id: True, force=True)
-    filename = 'inverted_pendulum.png'
 
-    figure_file = 'plots/' + filename
+    env = TrackmaniaEnv()
 
-    best_score = env.reward_range[0]
+    best_score = 0
     score_history = []
     load_checkpoint = False
 
     if load_checkpoint:
         agent.load_models()
-        env.render(mode='human')
 
     for i in range(n_games):
         observation = env.reset()
         done = False
         score = 0
         while not done:
-            action = agent.choose_action(observation)
-            observation_, reward, done, info = env.step(action)
+            actions = agent.choose_action(observation)
+            observation_, reward, done, info = env.step(actions)
             score += reward
-            agent.remember(observation, action, reward, observation_, done)
+            agent.remember(observation, actions, reward, observation_, done)
             if not load_checkpoint:
                 agent.learn()
             observation = observation_

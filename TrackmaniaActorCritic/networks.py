@@ -5,7 +5,7 @@ import tensorflow.keras as keras
 import tensorflow_probability as tfp
 from tensorflow.keras.layers import Dense
 
-
+# Determines our policy?
 class CriticNetwork(keras.Model):
     def __init__(self, n_actions, fc1_dims=256, fc2_dims=256, name='critic', chkpt_dir='tmp/sac'):
         super(CriticNetwork, self).__init__()
@@ -28,7 +28,7 @@ class CriticNetwork(keras.Model):
 
         return q
 
-
+# The network that determines the value of a state action pair.
 class ValueNetwork(keras.Model):
     def __init__(self, fc1_dims=256, fc2_dims=256, name='value', chkpt_dir='tmp/sac'):
         super(ValueNetwork, self).__init__()
@@ -49,9 +49,9 @@ class ValueNetwork(keras.Model):
 
         return v
 
-
+# determines our action for a given state.
 class ActorNetwork(keras.Model):
-    def __init__(self, max_action, fc1_dims=256, fc2_dims=256, name='actor', n_actions=2, chkpt_dir='tmp/sac'):
+    def __init__(self, max_action, fc1_dims=256, fc2_dims=256, name='actor', n_actions=2, chkpt_dir='tmp/sac', output_activation=None):
         super(ActorNetwork, self).__init__()
         self.fc1_dims = fc1_dims
         self.fc2_dims = fc2_dims
@@ -65,7 +65,7 @@ class ActorNetwork(keras.Model):
         self.fc1 = Dense(self.fc1_dims, activation='relu')
         self.fc2 = Dense(self.fc2_dims, activation='relu')
         self.mu = Dense(self.n_actions, activation=None)
-        self.sigma = Dense(self.n_actions, activation=None)
+        self.sigma = Dense(self.n_actions, activation=output_activation)
 
     def call(self, state):
         prob = self.fc1(state)

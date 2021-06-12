@@ -11,10 +11,12 @@ import tensorflow_docs.vis.embed as embed
 import cv2 as cv
 import os
 import pickle
+import VAE
 
 
 training_data = np.array(pickle.load(open("training_data.pickle", "rb"))).astype('float32')
 IMG_SIZE = 64
+
 
 def preprocess_images(images, ratio):
     images = images / 255.
@@ -22,10 +24,9 @@ def preprocess_images(images, ratio):
     return images[:training_part], images[training_part:]
 
 
-#plt.imshow(training_data[0])
-#plt.show()
+# plt.imshow(training_data[0])
+# plt.show()
 train_images, test_images = preprocess_images(training_data, 0.9)
-
 
 
 train_size = len(train_images)
@@ -37,102 +38,6 @@ train_dataset = (tf.data.Dataset.from_tensor_slices(train_images)
 test_dataset = (tf.data.Dataset.from_tensor_slices(test_images)
                 .shuffle(test_size).batch(batch_size))
 
-
-class CVAE(tf.keras.Model):
-    """Convolutional variational autoencoder."""
-
-    def __init__(self, latent_dim):
-        super(CVAE, self).__init__()
-        self.latent_dim = latent_dim
-        self.encoder = tf.keras.Sequential(
-            [
-                tf.keras.layers.InputLayer(input_shape=(IMG_SIZE, IMG_SIZE, 1)),
-                tf.keras.layers.Conv2D(
-                    filters=64, kernel_size=3, activation='relu'),
-
-                tf.keras.layers.MaxPool2D(pool_size=(2, 2)),
-
-                tf.keras.layers.Conv2D(
-                    filters=64, kernel_size=3, activation='relu'),
-
-                tf.keras.layers.MaxPool2D(pool_size=(2, 2)),
-
-                tf.keras.layers.Conv2D(
-                    filters=32, kernel_size=3, activation='relu'),
-
-                tf.keras.layers.MaxPool2D(pool_size=(2, 2)),
-
-                tf.keras.layers.Conv2D(
-                    filters=32, kernel_size=3, activation='relu'),
-
-                tf.keras.layers.MaxPool2D(pool_size=(2, 2)),
-
-                tf.keras.layers.Flatten(),
-                # No activation
-                tf.keras.layers.Dense(latent_dim + latent_dim),
-            ]
-        )
-
-        self.decoder = tf.keras.Sequential(
-            [
-                tf.keras.layers.InputLayer(input_shape=(latent_dim,)),
-
-                tf.keras.layers.Dense(units=4 * 4 * 32, activation=tf.nn.relu),
-
-                tf.keras.layers.Reshape(target_shape=(4, 4, 32)),
-
-                tf.keras.layers.UpSampling2D(size=(2, 2)),
-
-                tf.keras.layers.Conv2DTranspose(
-                    filters=32, kernel_size=3, padding='same',
-                    activation='relu'),
-
-                tf.keras.layers.UpSampling2D(size=(2, 2)),
-
-                tf.keras.layers.Conv2DTranspose(
-                    filters=32, kernel_size=3, padding='same',
-                    activation='relu'),
-
-                tf.keras.layers.UpSampling2D(size=(2, 2)),
-
-                tf.keras.layers.Conv2DTranspose(
-                    filters=64, kernel_size=3, padding='same',
-                    activation='relu'),
-
-                tf.keras.layers.UpSampling2D(size=(2, 2)),
-
-                tf.keras.layers.Conv2DTranspose(
-                    filters=64, kernel_size=3, padding='same',
-                    activation='relu'),
-                # No activation
-                tf.keras.layers.Conv2DTranspose(
-                    filters=1, kernel_size=3, strides=1, padding='same'),
-            ]
-        )
-
-    @tf.function
-    def sample(self, eps=None):
-        if eps is None:
-            eps = tf.random.normal(shape=(100, self.latent_dim))
-        return self.decode(eps, apply_sigmoid=True)
-
-    def encode(self, x):
-        mean, logvar = tf.split(self.encoder(x), num_or_size_splits=2, axis=1)
-        return mean, logvar
-
-    def reparameterize(self, mean, logvar):
-        eps = tf.random.normal(shape=mean.shape)
-        return eps * tf.exp(logvar * .5) + mean
-
-    def decode(self, z, apply_sigmoid=False):
-        logits = self.decoder(z)
-        if apply_sigmoid:
-            probs = tf.sigmoid(logits)
-            return probs
-        return logits
-
-
-optimizer = tf.keras.optimizers.Adam(1e-4)
 
 # NEXT THREE FUNCTIONS ARE FOR TRAINING STUFF
 def log_normal_pdf(sample, mean, logvar, raxis=1):
@@ -175,7 +80,7 @@ num_examples_to_generate = 16
 # it will be easier to see the improvement.
 random_vector_for_generation = tf.random.normal(
     shape=[num_examples_to_generate, latent_dim])
-model = CVAE(latent_dim)
+model = VAE.CVAE(latent_dim, IMG_SIZE)
 
 
 def generate_and_save_images(model, epoch, test_sample):
@@ -190,7 +95,7 @@ def generate_and_save_images(model, epoch, test_sample):
         plt.axis('off')
 
     # tight_layout minimizes the overlap between 2 sub-plots
-    #plt.savefig('image_at_epoch_{:04d}.png'.format(epoch))
+    # plt.savefig('image_at_epoch_{:04d}.png'.format(epoch))
     plt.show()
 
 
@@ -199,10 +104,10 @@ assert batch_size >= num_examples_to_generate
 for test_batch in test_dataset.take(1):
     test_sample = test_batch[0:num_examples_to_generate, :, :, :]
 
-#generate_and_save_images(model, 0, test_sample)
+# generate_and_save_images(model, 0, test_sample)
 
 
-
+optimizer = tf.keras.optimizers.Adam(1e-4)
 # ACTUAL TRAINING PART
 for epoch in range(1, epochs + 1):
     start_time = time.time()
@@ -219,6 +124,7 @@ for epoch in range(1, epochs + 1):
           .format(epoch, elbo, end_time - start_time))
     if epoch == epochs:
         generate_and_save_images(model, epoch, test_sample)
+        model.save_model()
 
 
 '''
